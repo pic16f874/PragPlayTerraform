@@ -11,7 +11,7 @@ resource "aws_instance" "nginx" {
   instance_type          = "t3.micro"
   key_name               = "H270-HD3-key"
   user_data              = file("user_data.sh")
-  vpc_security_group_ids = [aws_security_group.allow_http_s.id]
+  vpc_security_group_ids = [aws_security_group.allow_http_s.id,aws_security_group.allow_ssh.id]
 
   tags = {
     Name    = "nginx1"
@@ -23,7 +23,7 @@ resource "aws_instance" "nginx" {
 resource "aws_security_group" "allow_http_s" {
   name        = "allow_http_s"
   description = "Allow http and https inbound traffic"
-  vpc_id      = aws_vpc.main.id
+#  vpc_id      = aws_vpc.main.id
 
   ingress {
     description = "HTTP from VPC"
@@ -57,7 +57,7 @@ resource "aws_security_group" "allow_http_s" {
   resource "aws_security_group" "allow_ssh" {
     name        = "allow_ssh"
     description = "Allow ssh inbound traffic"
-    vpc_id      = aws_vpc.main.id
+#    vpc_id      = aws_vpc.main.id
 
     ingress {
       description = "ssh from VPC"
