@@ -79,5 +79,9 @@ resource "aws_security_group" "allow_http_s" {
       Name = "allow_ssh"
     }
 
-
 }
+
+output "instance_id" { value = aws_instance.nginx.id } 
+output "instance_ip" { value = aws_instance.nginx.public_ip } 
+
+
