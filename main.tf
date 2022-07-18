@@ -55,34 +55,73 @@ resource "aws_route_table" "Pub_RT" {
   tags = { Name = "Pub-RT" }
 
 }
-resource "aws_route_table" "Prv_RT" {
+
+resource "aws_route_table" "Prv_RT_a" {
   vpc_id = aws_vpc.stage_vpc.id
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.NATgw_a.id
   }
-  tags = { Name = "Prv-RT" }
+  tags = { Name = "Prv-RT_a" }
 }
 
+resource "aws_route_table" "Prv_RT_b" {
+  vpc_id = aws_vpc.stage_vpc.id
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.NATgw_b.id
+  }
+  tags = { Name = "Prv-RT_b" }
+}
 
 #---- Route tables association -------------------------------------------------
-resource "aws_route_table_association" "Pub_RT_association" {
+resource "aws_route_table_association" "Pub_RT_a_assn" {
   subnet_id      = aws_subnet.stage_pub_subnet_a.id
   route_table_id = aws_route_table.Pub_RT.id
 }
-resource "aws_route_table_association" "Prv_RT_association" {
-  subnet_id      = aws_subnet.stage_prv_subnet_a.id
-  route_table_id = aws_route_table.Prv_RT.id
+resource "aws_route_table_association" "Pub_RT_b_assn" {
+  subnet_id      = aws_subnet.stage_pub_subnet_b.id
+  route_table_id = aws_route_table.Pub_RT.id
 }
 
+resource "aws_route_table_association" "Prv_RT_a_assn" {
+  subnet_id      = aws_subnet.stage_prv_subnet_a.id
+  route_table_id = aws_route_table.Prv_RT_a.id
+}
+
+resource "aws_route_table_association" "Prv_RT_b_assn" {
+  subnet_id      = aws_subnet.stage_prv_subnet_b.id
+  route_table_id = aws_route_table.Prv_RT_b.id
+}
+
+
+
+#---- Elastic IP and NAT GW ----------------------------------------------------
 resource "aws_eip" "nat_eIP_a" {
-  #---- Elastic IP and NAT GW ----------------------------------------------------
-  vpc = true
+  vpc  = true
+  tags = { Name = "eIP_a" }
 }
 resource "aws_nat_gateway" "NATgw_a" {
   allocation_id = aws_eip.nat_eIP_a.id
   subnet_id     = aws_subnet.stage_pub_subnet_a.id
+  tags          = { Name = "NATgw_a" }
+
 }
+
+resource "aws_eip" "nat_eIP_b" {
+  vpc  = true
+  tags = { Name = "eIP_b" }
+}
+resource "aws_nat_gateway" "NATgw_b" {
+  allocation_id = aws_eip.nat_eIP_b.id
+  subnet_id     = aws_subnet.stage_pub_subnet_b.id
+  tags          = { Name = "NATgw_b" }
+}
+
+
+
+
+
 
 
 #---- ALB ----------------------------------------------------
@@ -110,8 +149,12 @@ resource "aws_alb_target_group" "alb_nginx_tg" {
   }
   # Alter the destination of the health check to be the login page.
   health_check {
-    path = "/login"
-    port = 80
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    interval            = 6
+    path                = "/"
+    port                = 80
   }
 }
 
@@ -125,62 +168,19 @@ resource "aws_alb_listener" "listener_http" {
   }
 }
 
+
+/*
 #Instance Attachment
-resource "aws_alb_target_group_attachment" "svc_physical_external" {
+resource "aws_alb_target_group_attachment" "nginx_1" {
   target_group_arn = "aws_alb_target_group.alb_nginx_tg.arn"
   target_id        = aws_instance.nginx_1.id
   port             = 80
 }
-
-/*
-resource "aws_alb_listener_rule" "listener_rule" {
-  depends_on   = ["aws_alb_target_group.alb_target_group"]
-  listener_arn = "${aws_alb_listener.alb_listener.arn}"
-  priority     = "${var.priority}"
-  action {
-    type             = "forward"
-    target_group_arn = "${aws_alb_target_group.alb_target_group.id}"
-  }
-  condition {
-    field  = "path-pattern"
-    values = ["${var.alb_path}"]
-  }
-}
-
-resource "aws_alb_target_group" "alb_target_group" {
-  name     = "${var.target_group_name}"
-  port     = "${var.svc_port}"
-  protocol = "HTTP"
-  vpc_id   = "${var.vpc_id}"
-  tags {
-    name = "${var.target_group_name}"
-  }
-  stickiness {
-    type            = "lb_cookie"
-    cookie_duration = 1800
-    enabled         = "${var.target_group_sticky}"
-  }
-  health_check {
-    healthy_threshold   = 3
-    unhealthy_threshold = 10
-    timeout             = 5
-    interval            = 10
-    path                = "${var.target_group_path}"
-    port                = "${var.target_group_port}"
-  }
-}
-
-#Instance Attachment
-resource "aws_alb_target_group_attachment" "svc_physical_external" {
-  target_group_arn = "${aws_alb_target_group.alb_target_group.arn}"
-  target_id        = "${aws_instance.svc.id}"
-  port             = 8080
-}
-
 */
 
 
 
+/*
 #---- i n t e r f a c e s ------------------------------------------------------
 resource "aws_network_interface" "if1_z1a" {
 
@@ -262,8 +262,8 @@ resource "aws_security_group" "allow_http_s" {
   }
 }
 
-output "instance_id_1" { value = aws_instance.nginx_1.id }
-output "instance_ip_1" { value = aws_instance.nginx_1.public_ip }
+#output "instance_id_1" { value = aws_instance.nginx_1.id }
+#output "instance_ip_1" { value = aws_instance.nginx_1.public_ip }
 
 #output "instance_id_2" { value = aws_instance.nginx_2.id }
 #output "instance_ip_2" { value = aws_instance.nginx_2.public_ip }
