@@ -9,20 +9,14 @@ resource "aws_internet_gateway" "vpc1_igw" {
 }
 
 #---- s u b n e t s ------------------------------------------------------------
-#resource "aws_subnet" "vpc1_pub_snets" { # set of public subnets
-#  count             = length(var.pub_snets_az)
-#  vpc_id            = aws_vpc.vpc1.id
-#  availability_zone = var.pub_snets_az[count.index]
-#  cidr_block        = var.pub_snets_cidr[count.index]
-#  tags              = { Name = var.pub_snets_nametag[count.index] }
-#}
-
 resource "aws_subnet" "vpc1_pub_snets" { # set of public subnets
   count             = length(var.pub_subnets_def[*].az)
   vpc_id            = aws_vpc.vpc1.id
   availability_zone = var.pub_subnets_def[count.index].az
   cidr_block        = var.pub_subnets_def[count.index].cidr
-  tags              = { Name = var.pub_subnets_def[count.index].nametag }
+  tags = {
+    Name = "${var.vpc_name}-${var.pub_subnets_def[count.index].nametag}-"
+  }
 }
 
 /*
@@ -75,7 +69,7 @@ resource "aws_route_table" "NAT_RT_a" {
   }
   tags = { Name = "NAT_RT_a" }
 }
-resource "aws_route_table_association" "nat_RT_a_snets" {
+resource "aws_route_ta`ble_association" "nat_RT_a_snets" {
   subnet_id      = aws_subnet.vpc1_nat_snet_a.id
   route_table_id = aws_route_table.NAT_RT_a.id
 }
