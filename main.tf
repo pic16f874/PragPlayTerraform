@@ -1,5 +1,3 @@
-provider "aws" {}
-
 #---- SSH keys  ----------------------------------------------------------------
 resource "aws_key_pair" "boot_key" {
   key_name   = "H270-HD3-key"
@@ -7,166 +5,6 @@ resource "aws_key_pair" "boot_key" {
 }
 
 
-#===== V P C  ==================================================================
-resource "aws_vpc" "stage_vpc" {
-  cidr_block = "10.0.0.0/16"
-  tags       = { Name = "stage-vpc" }
-}
-
-resource "aws_internet_gateway" "stage_igw" {
-  vpc_id = aws_vpc.stage_vpc.id
-  tags   = { Name = "stage-igw" }
-
-}
-#---- s u b n e t s ------------------------------------------------------------
-resource "aws_subnet" "stage_pub_subnet_a" {
-  vpc_id            = aws_vpc.stage_vpc.id
-  cidr_block        = "10.0.10.0/24"
-  availability_zone = "eu-central-1a"
-  tags              = { Name = "stage-pub-1a" }
-}
-resource "aws_subnet" "stage_pub_subnet_b" {
-  vpc_id            = aws_vpc.stage_vpc.id
-  cidr_block        = "10.0.11.0/24"
-  availability_zone = "eu-central-1b"
-  tags              = { Name = "stage-pub-1b" }
-}
-
-resource "aws_subnet" "stage_prv_subnet_a" {
-  vpc_id            = aws_vpc.stage_vpc.id
-  cidr_block        = "10.0.20.0/24"
-  availability_zone = "eu-central-1a"
-  tags              = { Name = "stage-prv-1a" }
-}
-resource "aws_subnet" "stage_prv_subnet_b" {
-  vpc_id            = aws_vpc.stage_vpc.id
-  cidr_block        = "10.0.21.0/24"
-  availability_zone = "eu-central-1b"
-  tags              = { Name = "stage-prv-1b" }
-}
-
-#---- Route tables -------------------------------------------------------------
-resource "aws_route_table" "Pub_RT" {
-  vpc_id = aws_vpc.stage_vpc.id
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.stage_igw.id
-  }
-  tags = { Name = "Pub-RT" }
-
-}
-
-resource "aws_route_table" "Prv_RT_a" {
-  vpc_id = aws_vpc.stage_vpc.id
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.NATgw_a.id
-  }
-  tags = { Name = "Prv-RT_a" }
-}
-
-resource "aws_route_table" "Prv_RT_b" {
-  vpc_id = aws_vpc.stage_vpc.id
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.NATgw_b.id
-  }
-  tags = { Name = "Prv-RT_b" }
-}
-
-#---- Route tables association -------------------------------------------------
-resource "aws_route_table_association" "Pub_RT_a_assn" {
-  subnet_id      = aws_subnet.stage_pub_subnet_a.id
-  route_table_id = aws_route_table.Pub_RT.id
-}
-resource "aws_route_table_association" "Pub_RT_b_assn" {
-  subnet_id      = aws_subnet.stage_pub_subnet_b.id
-  route_table_id = aws_route_table.Pub_RT.id
-}
-
-resource "aws_route_table_association" "Prv_RT_a_assn" {
-  subnet_id      = aws_subnet.stage_prv_subnet_a.id
-  route_table_id = aws_route_table.Prv_RT_a.id
-}
-
-resource "aws_route_table_association" "Prv_RT_b_assn" {
-  subnet_id      = aws_subnet.stage_prv_subnet_b.id
-  route_table_id = aws_route_table.Prv_RT_b.id
-}
-
-
-
-#---- Elastic IP and NAT GW ----------------------------------------------------
-resource "aws_eip" "nat_eIP_a" {
-  vpc  = true
-  tags = { Name = "eIP_a" }
-}
-resource "aws_nat_gateway" "NATgw_a" {
-  allocation_id = aws_eip.nat_eIP_a.id
-  subnet_id     = aws_subnet.stage_pub_subnet_a.id
-  tags          = { Name = "NATgw_a" }
-
-}
-
-resource "aws_eip" "nat_eIP_b" {
-  vpc  = true
-  tags = { Name = "eIP_b" }
-}
-resource "aws_nat_gateway" "NATgw_b" {
-  allocation_id = aws_eip.nat_eIP_b.id
-  subnet_id     = aws_subnet.stage_pub_subnet_b.id
-  tags          = { Name = "NATgw_b" }
-}
-
-
-
-
-
-
-
-#---- ALB ----------------------------------------------------
-resource "aws_alb" "alb_nginx" {
-  name            = "alb-nginx"
-  subnets         = [aws_subnet.stage_pub_subnet_a.id, aws_subnet.stage_pub_subnet_b.id]
-  security_groups = [aws_security_group.allow_http_s.id]
-  internal        = false
-  tags = {
-    Name = "alb-nginx"
-  }
-  #  access_logs {
-  #    bucket = "${var.s3_bucket}"
-  #    prefix = "ELB-logs"
-  #  }
-}
-
-resource "aws_alb_target_group" "alb_nginx_tg" {
-  name     = "alb-nginx-tg"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.stage_vpc.id
-  stickiness {
-    type = "lb_cookie"
-  }
-  # Alter the destination of the health check to be the login page.
-  health_check {
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    interval            = 6
-    path                = "/"
-    port                = 80
-  }
-}
-
-resource "aws_alb_listener" "listener_http" {
-  load_balancer_arn = aws_alb.alb_nginx.arn
-  port              = "80"
-  protocol          = "HTTP"
-  default_action {
-    target_group_arn = aws_alb_target_group.alb_nginx_tg.arn
-    type             = "forward"
-  }
-}
 
 
 /*
@@ -194,9 +32,10 @@ resource "aws_network_interface" "if1_z1a" {
 #  private_ips = ["10.0.11.10"]
 #  tags        = { Name = "if1-z1b" }
 #}
-
+*/
 
 #===== Instances ===============================================================
+/*
 resource "aws_instance" "nginx_1" {
   #  ami = "ami-0a1ee2fb28fe05df3" #AmL2
   ami           = "ami-065deacbcaac64cf2" #Ubuntu 2204
@@ -210,6 +49,15 @@ resource "aws_instance" "nginx_1" {
   #  vpc_security_group_ids = [aws_security_group.allow_http_s.id, aws_security_group.allow_ssh.id]
   tags = { Name = "nginx1", Project = "test_task" }
 }
+resource "aws_network_interface" "if1_z1a" {
+  subnet_id = aws_subnet.vpc1_pub_snets[1].id
+  #  private_ips = ["10.0.10.10"]
+  tags = { Name = "if1-z1a" }
+}
+*/
+
+
+
 
 /*
 resource "aws_instance" "nginx_2" {
@@ -231,7 +79,7 @@ resource "aws_instance" "nginx_2" {
 resource "aws_security_group" "allow_http_s" {
   name        = "allow_http_s"
   description = "Allow http and https inbound traffic"
-  vpc_id      = aws_vpc.stage_vpc.id
+  vpc_id      = aws_vpc.vpc1.id
 
   ingress {
     description = "HTTP from VPC"
@@ -259,6 +107,32 @@ resource "aws_security_group" "allow_http_s" {
 
   tags = {
     Name = "allow_http_s"
+  }
+}
+
+resource "aws_security_group" "allow_ssh" {
+  name        = "allow_ssh"
+  description = "Allow_ssh"
+  vpc_id      = aws_vpc.vpc1.id
+
+  ingress {
+    description = "ssh from VPC"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "allow_ssh"
   }
 }
 
